@@ -236,3 +236,24 @@ class _LAPACK:
                                     float_pointer,  # SCALE
                                     _ptr_int)  # INFO
         return functype(addr)
+
+    @classmethod
+    def numba_xtrtrs(cls, dtype):
+        d = _blas_kinds[dtype]
+        func_name = f'{d}trtrs'
+        float_pointer = _get_float_pointer_for_dtype(d)
+
+        addr = get_cython_function_address('scipy.linalg.cython_lapack', func_name)
+        functype = ctypes.CFUNCTYPE(None,
+                                    _ptr_int,  # UPLO
+                                    _ptr_int,  # TRANS
+                                    _ptr_int,  # DIAG
+                                    _ptr_int,  # N
+                                    _ptr_int,  # NRHS
+                                    float_pointer,  # A
+                                    _ptr_int,  # LDA
+                                    float_pointer,  # B
+                                    _ptr_int,  # LDB
+                                    _ptr_int)  # INFO
+
+        return functype(addr)

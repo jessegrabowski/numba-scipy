@@ -22,6 +22,73 @@ def make_data(n, dtype):
     return A.astype(dtype), B.astype(dtype)
 
 
+class numba_solve_triangular_test(unittest.TestCase):
+    def setUp(self) -> None:
+        @njit
+        def numba_solve_triangular(A, B, trans=0, lower=False, unit_diagonal=False):
+            return linalg.solve_triangular(A, B, trans=trans, lower=lower, unit_diagonal=unit_diagonal)
+
+        self.solve_triangular = numba_solve_triangular
+
+    def test_simple(self):
+        """
+        solve_triangular on a simple 2x2 matrix.
+        """
+        A = np.array([[1, 0], [1, 2]], dtype='float64')
+        b = np.array([1, 1], dtype='float64').reshape(-1,1)
+        sol = self.solve_triangular(A, b, lower=True)
+        assert_array_almost_equal(sol.squeeze(), [1, 0])
+
+        # check that it works also for non-contiguous matrices
+        sol = self.solve_triangular(A.T, b, lower=False)
+        assert_array_almost_equal(sol.squeeze(), [.5, .5])
+
+        # and that it gives the same result as trans=1
+        sol = self.solve_triangular(A, b, lower=True, trans=1)
+        assert_array_almost_equal(sol.squeeze(), [.5, .5])
+
+        b = np.eye(2, dtype='float64')
+        sol = self.solve_triangular(A, b, lower=True, trans=1)
+        assert_array_almost_equal(sol, [[1., -.5], [0, 0.5]])
+
+    def test_simple_complex(self):
+        """
+        solve_triangular on a simple 2x2 complex matrix
+        """
+        A = np.array([[1+1j, 0], [1j, 2]], dtype='complex128')
+        b = np.identity(2, dtype='complex128')
+        sol = self.solve_triangular(A, b, lower=True, trans=1)
+        assert_array_almost_equal(sol, [[.5-.5j, -.25-.25j], [0, 0.5]])
+
+        # check other option combinations with complex rhs
+        b = np.diag([1+1j, 1+2j]).astype('complex128')
+        sol = self.solve_triangular(A, b, lower=True, trans=0)
+        assert_array_almost_equal(sol, [[1, 0], [-0.5j, 0.5+1j]])
+
+        sol = self.solve_triangular(A, b, lower=True, trans=1)
+        assert_array_almost_equal(sol, [[1, 0.25-0.75j], [0, 0.5+1j]])
+
+        sol = self.solve_triangular(A, b, lower=True, trans=2)
+        assert_array_almost_equal(sol, [[1j, -0.75-0.25j], [0, 0.5+1j]])
+
+        sol = self.solve_triangular(A.T, b, lower=False, trans=0)
+        assert_array_almost_equal(sol, [[1, 0.25-0.75j], [0, 0.5+1j]])
+
+        sol = self.solve_triangular(A.T, b, lower=False, trans=1)
+        assert_array_almost_equal(sol, [[1, 0], [-0.5j, 0.5+1j]])
+
+        sol = self.solve_triangular(A.T, b, lower=False, trans=2)
+        assert_array_almost_equal(sol, [[1j, 0], [-0.5, 0.5+1j]])
+
+    # def test_check_finite(self):
+    #     """
+    #     solve_triangular on a simple 2x2 matrix.
+    #     """
+    #     A = np.array([[1, 0], [1, 2]])
+    #     b = [1, 1]
+    #     sol = self.solve_triangular(A, b, lower=True, check_finite=False)
+    #     assert_array_almost_equal(sol, [1, 0])
+
 class numba_schur_test(unittest.TestCase):
     def setUp(self) -> None:
         @njit

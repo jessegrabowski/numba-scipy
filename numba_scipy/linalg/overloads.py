@@ -13,6 +13,59 @@ from numba_scipy.linalg.intrinsics import val_to_int_ptr, int_ptr_to_val
 from numba_scipy.linalg.LAPACK import _LAPACK
 
 
+@overload(scipy.linalg.solve_triangular)
+def solve_triangular_impl(A, B, trans=0, lower=False, unit_diagonal=False):
+    ensure_lapack()
+
+    _check_scipy_linalg_matrix(A, 'solve_triangular')
+    _check_scipy_linalg_matrix(B, 'solve_triangular')
+
+    dtype = A.dtype
+    w_type = _get_underlying_float(dtype)
+
+    numba_trtrs = _LAPACK().numba_xtrtrs(dtype)
+
+    def impl(A, B, trans=0, lower=False, unit_diagonal=False):
+        _N = np.int32(A.shape[-1])
+        if A.shape[-2] != _N:
+            raise linalg.LinAlgError("Last 2 dimensions of A must be square")
+
+        if A.shape[0] != B.shape[0]:
+            raise linalg.LinAlgError("Dimensions of A and B do not conform")
+
+        A_copy = _copy_to_fortran_order(A)
+        B_copy = _copy_to_fortran_order(B)
+
+        if isinstance(trans, str):
+            if trans not in ['N', 'C', 'T']:
+                raise ValueError('Parameter "trans" should be one of N, C, T or 0, 1, 2')
+            transval = ord(trans)
+
+        else:
+            if trans not in [0, 1, 2]:
+                raise ValueError('Parameter "trans" should be one of N, C, T or 0, 1, 2')
+            if trans == 0:
+                transval = ord('N')
+            elif trans == 1:
+                transval = ord('T')
+            else:
+                transval = ord('C')
+
+        UPLO = val_to_int_ptr(ord('L') if lower else ord('U'))
+        TRANS = val_to_int_ptr(transval)
+        DIAG = val_to_int_ptr(ord('U') if unit_diagonal else ord('N'))
+        N = val_to_int_ptr(_N)
+        NRHS = val_to_int_ptr(B.shape[1])
+        LDA = val_to_int_ptr(_N)
+        LDB = val_to_int_ptr(_N)
+        INFO = val_to_int_ptr(0)
+
+        numba_trtrs(UPLO, TRANS, DIAG, N, NRHS, A_copy.view(w_type).ctypes, LDA, B_copy.view(w_type).ctypes, LDB, INFO)
+
+        return B_copy
+
+    return impl
+
 @overload(scipy.linalg.schur)
 def schur_impl(A, output):
     ensure_lapack()
